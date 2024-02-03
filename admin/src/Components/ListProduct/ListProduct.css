@@ -8,6 +8,7 @@
     margin: 30px;
     border-radius: 6px;
     background: white;
+    align-items: center;
 }
 
 .listproduct-format-main {
@@ -24,6 +25,7 @@
 .listproduct-main {
     align-items: center;
     font-weight: 500;
+
 }
 
 .listproduct-product-icon {
@@ -32,11 +34,11 @@
 
 .listproduct-remove-icon {
     cursor: pointer;
-    margin: auto;
 }
 
 .listproduct-allproducts {
     overflow-y: auto;
+    width: 100%;
 }
 
 @media (max-width: 800px) {

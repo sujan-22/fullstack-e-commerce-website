@@ -7,6 +7,7 @@ const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
 const { type } = require("os");
+const { error, log } = require("console");
 
 app.use(express.json());
 app.use(cors());
@@ -122,6 +123,186 @@ app.get("/allproducts", async (req, res) => {
   let products = await Product.find({});
   console.log("all products fetched");
   res.send(products);
+});
+
+//  SCHEMA CREATING FOR USER MODEL
+
+const Users = mongoose.model("Users", {
+  name: {
+    type: String,
+  },
+  email: {
+    type: String,
+    unique: true,
+  },
+  password: {
+    type: String,
+  },
+  cartData: {
+    type: Object,
+  },
+  data: {
+    type: Date,
+    defaulr: Date.now(),
+  },
+});
+
+// CREATING END POINT FOR REGISTERING USER
+
+app.post("/signup", async (req, res) => {
+  let check = await Users.findOne({ email: req.body.email });
+  if (check) {
+    return res.status(400).json({
+      success: false,
+      errors: "Existing user found with same email address already",
+    });
+  }
+
+  let cart = {};
+  for (let i = 0; i < 300; i++) {
+    cart[i] = 0;
+  }
+
+  const user = new Users({
+    name: req.body.username,
+    email: req.body.email,
+    password: req.body.password,
+    cartData: cart,
+  });
+
+  await user.save();
+
+  const data = {
+    user: {
+      id: user.id,
+    },
+  };
+
+  const token = jwt.sign(data, "secret_ecom");
+  res.json({ success: true, token });
+});
+
+// CREATING ENDPOINT FOR USER LOGIN
+
+app.post("/login", async (req, res) => {
+  let user = await Users.findOne({ email: req.body.email });
+  if (user) {
+    const passCompare = req.body.password === user.password;
+    if (passCompare) {
+      const data = {
+        user: {
+          id: user.id,
+        },
+      };
+      const token = jwt.sign(data, "secret_ecom");
+      res.json({ success: true, token });
+    } else {
+      res.json({ success: false, errors: "Wrong password" });
+    }
+  } else {
+    res.json({ success: false, errors: "Wrong email" });
+  }
+});
+
+// CREATING ENDPOINT FOR NEWCOLLECTION DATA
+app.get("/newcollections", async (req, res) => {
+  try {
+    // Fetch random 8 products
+    let newcollection = await Product.aggregate([{ $sample: { size: 8 } }]);
+
+    console.log("new collection fetched");
+    res.send(newcollection);
+  } catch (error) {
+    console.error("Error fetching new collection:", error);
+    res.status(500).json({ success: false, errors: "Internal Server Error" });
+  }
+});
+
+// CREATING ENDPOINT FOR POPULAR IN WOMEN SECTION
+app.get("/popularinwomen", async (req, res) => {
+  let products = await Product.find({ category: "women" });
+  let popularinwomen = products.slice(0, 4);
+  res.send(popularinwomen);
+});
+
+// CREATING MIDDLEWARE TO FETCH USER
+const fetchUser = async (req, res, next) => {
+  const token = req.header("auth_token");
+  if (!token) {
+    res.status(401).send({ errors: "Please authenticate using valid token" });
+  } else {
+    try {
+      const data = jwt.verify(token, "secret_ecom");
+      req.user = data.user;
+      next();
+    } catch (err) {
+      res.status(401).send({ errors: err.message });
+    }
+  }
+};
+
+// CREATING ENDPOINT FOR ADDING PRODUCTS IN CART
+app.post("/addtocart", fetchUser, async (req, res) => {
+  let userData = await Users.findOne({ _id: req.user.id });
+  userData.cartData[req.body.itemId] += 1;
+  await Users.findOneAndUpdate(
+    { _id: req.user.id },
+    { cartData: userData.cartData }
+  );
+  res.send("Added");
+});
+
+// CREATING TO REMOVE PRODUCTS FROM CART DATA
+app.post("/removefromcart", fetchUser, async (req, res) => {
+  let userData = await Users.findOne({ _id: req.user.id });
+  if (userData.cartData[req.body.itemId] > 0) {
+    userData.cartData[req.body.itemId] -= 1;
+    await Users.findOneAndUpdate(
+      { _id: req.user.id },
+      { cartData: userData.cartData }
+    );
+    res.send("Removed");
+  }
+});
+
+// CREATING ENDPOINT TO GET CART DATA
+app.post("/getcart", fetchUser, async (req, res) => {
+  let userData = await Users.findOne({ _id: req.user.id });
+  res.json(userData.cartData);
+});
+
+// Schema for newsletter subscriptions
+const NewsletterSubscription = mongoose.model("NewsletterSubscription", {
+  email: {
+    type: String,
+    unique: true,
+  },
+});
+
+// Endpoint for subscribing to the newsletter
+app.post("/subscribe", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Check if the email is already subscribed
+    const existingSubscription = await NewsletterSubscription.findOne({
+      email,
+    });
+    if (existingSubscription) {
+      return res
+        .status(400)
+        .json({ success: false, errors: "Email is already subscribed." });
+    }
+
+    // Create a new subscription record
+    const newSubscription = new NewsletterSubscription({ email });
+    await newSubscription.save();
+    console.log("New subscription");
+    res.json({ success: true, message: "Subscribed successfully." });
+  } catch (error) {
+    console.error("Error subscribing to the newsletter:", error);
+    res.status(500).json({ success: false, errors: "Internal Server Error" });
+  }
 });
 
 app.listen(port, (error) => {

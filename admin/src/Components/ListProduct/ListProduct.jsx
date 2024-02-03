@@ -44,12 +44,12 @@ const ListProduct = () => {
       <div className="listproduct-allproducts">
         <hr />
         {allproducts.map((product, index) => {
-          console.log(product.image);
           return (
             <>
               <div
                 key={index}
                 className="listproduct-format-main listproduct-main"
+                style={{ width: "100%" }}
               >
                 <img
                   src={product.image}
